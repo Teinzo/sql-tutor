@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block naslov %}Prijava — {{ app_name }}{% endblock %}
+{% block sirina %}sadrzaj-usko{% endblock %}
+
+{% block stil %}
+<style>
+    .obrazac-omot { max-width: 400px; margin: 48px auto 0; }
+    .obrazac-omot .brand-veliki {
+        text-align: center;
+        font-size: 1.8rem;
+        color: var(--naglasak);
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .obrazac-omot .podnaslov {
+        text-align: center;
+        color: var(--tekst-prigusen);
+        margin-bottom: 28px;
+        font-size: 0.95rem;
+    }
+    .veza-dolje { text-align: center; margin-top: 18px; font-size: 0.9rem; color: var(--tekst-prigusen); }
+    .veza-dolje a { color: var(--naglasak); text-decoration: none; }
+    .veza-dolje a:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block sadrzaj %}
+<div class="obrazac-omot">
+    <div class="brand-veliki">🎓 SQL Tutor</div>
+    <p class="podnaslov">Prijavite se za nastavak učenja</p>
+
+    <div class="kartica">
+        <div id="poruka" class="skriveno"></div>
+
+        <form id="obrazac" autocomplete="on">
+            <div class="polje">
+                <label for="username">Korisničko ime</label>
+                <input type="text" id="username" name="username" required
+                       autocomplete="username" placeholder="npr. student">
+            </div>
+
+            <div class="polje">
+                <label for="password">Lozinka</label>
+                <input type="password" id="password" name="password" required
+                       autocomplete="current-password" placeholder="••••••••">
+            </div>
+
+            <button type="submit" class="btn btn-blok" id="gumb">Prijava</button>
+        </form>
+
+        <p class="veza-dolje">
+            Nemate račun? <a href="/register">Registrirajte se</a>
+        </p>
+    </div>
+
+    <p class="veza-dolje sitno">
+        Demo: <strong>student / student123</strong> ili <strong>nastavnik / nastavnik123</strong>
+    </p>
+</div>
+{% endblock %}
+
+{% block skripta %}
+<script>
+document.getElementById('obrazac').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const gumb = document.getElementById('gumb');
+    gumb.disabled = true;
+    gumb.innerHTML = '<span class="vrtnja"></span> Prijava...';
+    poruka('poruka', '');
+
+    try {
+        await apiPost('/api/login', {
+            username: document.getElementById('username').value.trim(),
+            password: document.getElementById('password').value,
+        });
+        window.location.href = '/dashboard';
+    } catch (err) {
+        poruka('poruka', err.message, 'greska');
+        gumb.disabled = false;
+        gumb.textContent = 'Prijava';
+    }
+});
+</script>
+{% endblock %}

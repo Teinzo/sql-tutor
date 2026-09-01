@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block naslov %}Moj napredak — {{ app_name }}{% endblock %}
+
+{% block stil %}
+<style>
+    .stupci-graf {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        height: 170px;
+        padding: 12px 0 0;
+        overflow-x: auto;
+    }
+    .stupac-omot {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        min-width: 38px;
+        flex: 1;
+    }
+    .stupac-par {
+        display: flex;
+        align-items: flex-end;
+        gap: 2px;
+        height: 120px;
+        width: 100%;
+        justify-content: center;
+    }
+    .stupac {
+        width: 13px;
+        border-radius: 3px 3px 0 0;
+        min-height: 3px;
+        transition: height 0.4s ease;
+    }
+    .stupac.ukupno { background: var(--povrsina-2); }
+    .stupac.tocno  { background: var(--uspjeh); }
+    .stupac-oznaka {
+        font-size: 0.68rem;
+        color: var(--tekst-prigusen);
+        white-space: nowrap;
+        transform: rotate(-45deg);
+        transform-origin: center;
+    }
+    .legenda { display: flex; gap: 16px; font-size: 0.8rem; color: var(--tekst-prigusen); margin-top: 22px; }
+    .legenda span { display: flex; align-items: center; gap: 6px; }
+    .legenda i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+</style>
+{% endblock %}
+
+{% block sadrzaj %}
+<div class="zaglavlje-stranice">
+    <h1>📊 Moj napredak</h1>
+    <p>Pregled uspješnosti kroz zadatke, teme i razine težine.</p>
+</div>
+
+<div id="poruka" class="skriveno"></div>
+
+<div id="ucitavanje" class="prazno">
+    <span class="vrtnja"></span><p>Učitavanje statistike…</p>
+</div>
+
+<div id="sadrzajStranice" class="skriveno">
+    <div class="stat-mreza" id="sazetak"></div>
+
+    <div class="mreza-2 razmak-m">
+        <div class="kartica">
+            <h2 class="kartica-h">Uspješnost po razini težine</h2>
+            <div id="poTezini"></div>
+        </div>
+
+        <div class="kartica">
+            <h2 class="kartica-h">Uspješnost po shemi baze</h2>
+            <div id="poShemi"></div>
+        </div>
+    </div>
+
+    <div class="kartica razmak-m">
+        <h2 class="kartica-h">Točnost po temama</h2>
+        <div id="poTemi"></div>
+    </div>
+
+    <div class="kartica razmak-m">
+        <h2 class="kartica-h">Aktivnost kroz vrijeme</h2>
+        <div id="krozVrijeme"></div>
+        <div class="legenda">
+            <span><i style="background:var(--povrsina-2)"></i> ukupno predaja</span>
+            <span><i style="background:var(--uspjeh)"></i> točnih</span>
+        </div>
+    </div>
+
+    <div class="kartica">
+        <h2 class="kartica-h">Zadnje predaje</h2>
+        <div id="zadnje"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block skripta %}
+<script>
+function traka(oznaka, rijeseno, ukupno) {
+    const postotak = ukupno ? Math.round(rijeseno / ukupno * 100) : 0;
+    return `<div class="traka-red">
+        <span class="oznaka-tekst">${esc(oznaka)}</span>
+        <div class="traka"><div class="traka-ispuna" style="width:${postotak}%"></div></div>
+        <span class="vrijednost">${rijeseno}/${ukupno}</span>
+    </div>`;
+}
+
+(async () => {
+    try {
+        const p = await apiGet('/api/progress');
+        const s = p.sazetak;
+
+        document.getElementById('sazetak').innerHTML = `
+            <div class="stat">
+                <div class="stat-broj">${s.rijeseno_zadataka}</div>
+                <div class="stat-oznaka">Riješenih zadataka</div>
+            </div>
+            <div class="stat">
+                <div class="stat-broj">${s.postotak_rijesenih}%</div>
+                <div class="stat-oznaka">Od ukupno ${s.ukupno_zadataka} zadataka</div>
+            </div>
+            <div class="stat">
+                <div class="stat-broj">${s.ukupno_predaja}</div>
+                <div class="stat-oznaka">Ukupno predaja</div>
+            </div>
+            <div class="stat">
+                <div class="stat-broj">${s.postotak_tocnosti}%</div>
+                <div class="stat-oznaka">Točnih predaja</div>
+            </div>
+            <div class="stat">
+                <div class="stat-broj">${s.prosjecno_trajanje_ms}<span style="font-size:1rem"> ms</span></div>
+                <div class="stat-oznaka">Prosječno trajanje upita</div>
+            </div>`;
+
+        document.getElementById('poTezini').innerHTML =
+            p.po_tezini.length
+                ? p.po_tezini.map((r) => traka(r.difficulty, r.rijeseno, r.ukupno)).join('')
+                : '<p class="prigusen sitno">Nema podataka.</p>';
+
+        document.getElementById('poShemi').innerHTML =
+            p.po_shemi.length
+                ? p.po_shemi.map((r) => traka(r.naziv, r.rijeseno, r.ukupno)).join('')
+                : '<p class="prigusen sitno">Nema podataka.</p>';
+
+        document.getElementById('poTemi').innerHTML =
+            p.po_temi.length
+                ? p.po_temi.map((r) => traka(r.tema, r.tocnih || 0, r.pokusaja)).join('')
+                : '<p class="prigusen sitno">Još niste predali nijedno rješenje.</p>';
+
+        /* Stupčasti prikaz aktivnosti */
+        if (p.kroz_vrijeme.length) {
+            const maks = Math.max(...p.kroz_vrijeme.map((d) => d.pokusaja), 1);
+            document.getElementById('krozVrijeme').innerHTML = `
+                <div class="stupci-graf">${p.kroz_vrijeme.map((d) => {
+                    const h1 = Math.round(d.pokusaja / maks * 118);
+                    const h2 = Math.round((d.tocnih || 0) / maks * 118);
+                    const dan = d.dan ? d.dan.slice(5) : '';
+                    return `<div class="stupac-omot" title="${esc(d.dan)}: ${d.pokusaja} predaja, ${d.tocnih || 0} točnih">
+                        <div class="stupac-par">
+                            <div class="stupac ukupno" style="height:${h1}px"></div>
+                            <div class="stupac tocno"  style="height:${h2}px"></div>
+                        </div>
+                        <span class="stupac-oznaka">${esc(dan)}</span>
+                    </div>`;
+                }).join('')}</div>`;
+        } else {
+            document.getElementById('krozVrijeme').innerHTML =
+                '<p class="prigusen sitno">Nema zabilježene aktivnosti.</p>';
+        }
+
+        document.getElementById('zadnje').innerHTML = p.zadnje_predaje.length
+            ? `<div class="tablica-omot"><table>
+                <thead><tr><th>Zadatak</th><th>Težina</th><th>Rezultat</th><th>Vrijeme</th></tr></thead>
+                <tbody>${p.zadnje_predaje.map((r) => `
+                    <tr>
+                        <td>${esc(r.title)}</td>
+                        <td><span class="oznaka ${oznakaTezine(r.difficulty)}">${esc(r.difficulty)}</span></td>
+                        <td><span class="oznaka ${r.is_correct ? 'oznaka-zelena' : 'oznaka-crvena'}">
+                            ${r.is_correct ? 'točno' : 'netočno'}</span></td>
+                        <td class="prigusen">${datumHr(r.submitted_at)}</td>
+                    </tr>`).join('')}</tbody></table></div>`
+            : '<p class="prigusen sitno">Još nemate predanih rješenja. <a href="/tasks" style="color:var(--naglasak)">Riješite prvi zadatak →</a></p>';
+
+        document.getElementById('ucitavanje').classList.add('skriveno');
+        document.getElementById('sadrzajStranice').classList.remove('skriveno');
+    } catch (e) {
+        document.getElementById('ucitavanje').classList.add('skriveno');
+        poruka('poruka', e.message, 'greska');
+    }
+})();
+</script>
+{% endblock %}

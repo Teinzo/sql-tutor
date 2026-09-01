@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block naslov %}Generiranje zadataka — {{ app_name }}{% endblock %}
+
+{% block stil %}
+<style>
+    .generirani {
+        background: var(--povrsina);
+        border: 1px solid var(--rub);
+        border-left: 3px solid var(--ljubicasta);
+        border-radius: var(--radijus);
+        padding: 20px;
+        margin-bottom: 14px;
+    }
+    .generirani h3 { font-size: 1.05rem; margin-bottom: 8px; }
+    .generirani .opis { color: var(--tekst-prigusen); font-size: 0.92rem; margin-bottom: 12px; }
+    .generirani .oznake { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .generirani details summary {
+        cursor: pointer;
+        color: var(--tekst-prigusen);
+        font-size: 0.85rem;
+        margin-bottom: 8px;
+    }
+    .spremljen { border-left-color: var(--uspjeh); opacity: 0.7; }
+</style>
+{% endblock %}
+
+{% block sadrzaj %}
+<div class="zaglavlje-stranice">
+    <h1>⚡ Generiranje zadataka</h1>
+    <p>Jezični model složit će nove zadatke prema odabranoj shemi, temi i razini težine.
+       Svako se rješenje automatski izvršava nad bazom prije prikaza — neizvršivi zadaci se odbacuju.
+       <span class="prigusen">Manji broj zadataka generira se osjetno brže.</span></p>
+</div>
+
+<div class="kartica razmak-m">
+    <div class="red-polja">
+        <div class="polje">
+            <label for="shema">Shema baze</label>
+            <select id="shema">
+                {% for s in sheme %}
+                <option value="{{ s.id }}">{{ s.ikona }} {{ s.naziv }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="polje">
+            <label for="tezina">Razina težine</label>
+            <select id="tezina">
+                <option value="početnik">Početnik</option>
+                <option value="srednji" selected>Srednji</option>
+                <option value="napredni">Napredni</option>
+            </select>
+        </div>
+
+        <div class="polje">
+            <label for="tema">Tema</label>
+            <select id="tema">
+                <option value="osnovni upiti (SELECT, WHERE, ORDER BY)">Osnovni upiti</option>
+                <option value="spajanje tablica (JOIN)">Spajanje tablica (JOIN)</option>
+                <option value="agregatne funkcije i GROUP BY">Agregatne funkcije</option>
+                <option value="GROUP BY s HAVING">GROUP BY i HAVING</option>
+                <option value="podupiti">Podupiti</option>
+                <option value="rad s NULL vrijednostima">NULL vrijednosti</option>
+                <option value="rad s tekstom i LIKE">Tekst i LIKE</option>
+            </select>
+        </div>
+
+        <div class="polje" style="max-width:130px">
+            <label for="broj" title="Manji broj znači brže generiranje">Broj zadataka</label>
+            <select id="broj">
+                <option>1</option><option selected>2</option>
+                <option>3</option><option>4</option><option>5</option>
+            </select>
+        </div>
+
+        <button class="btn" id="gumb">Generiraj</button>
+    </div>
+</div>
+
+<div id="poruka" class="skriveno"></div>
+<div id="rezultat"></div>
+{% endblock %}
+
+{% block skripta %}
+<script>
+let generirani = [];
+
+async function generiraj() {
+    const gumb = document.getElementById('gumb');
+    gumb.disabled = true;
+    gumb.innerHTML = '<span class="vrtnja"></span> Generiranje…';
+    poruka('poruka', 'Model generira zadatke, ovo može potrajati desetak sekundi…', 'info');
+    document.getElementById('rezultat').innerHTML = '';
+
+    try {
+        const r = await apiPost('/api/generate-tasks', {
+            schema_id: document.getElementById('shema').value,
+            difficulty: document.getElementById('tezina').value,
+            topic: document.getElementById('tema').value,
+            count: parseInt(document.getElementById('broj').value, 10),
+        });
+
+        generirani = r.tasks;
+        prikazi();
+
+        const napomene = [];
+        if (r.odbaceno)  napomene.push(`${r.odbaceno} odbačeno (rješenje nije izvršivo)`);
+        if (r.duplikata) napomene.push(`${r.duplikata} preskočeno (zadatak već postoji)`);
+        const dodatak = napomene.length ? ` — ${napomene.join(', ')}` : '';
+
+        poruka('poruka', `Generirano ${r.tasks.length} zadataka${dodatak}.`, 'uspjeh');
+    } catch (e) {
+        poruka('poruka', e.message, 'greska');
+    }
+
+    gumb.disabled = false;
+    gumb.textContent = 'Generiraj';
+}
+
+function prikazi() {
+    document.getElementById('rezultat').innerHTML = generirani.map((z, i) => `
+        <div class="generirani" id="zadatak-${i}">
+            <div class="flex-izmedu">
+                <h3>${esc(z.title)}</h3>
+                <span class="oznaka ${oznakaTezine(z.difficulty)}">${esc(z.difficulty)}</span>
+            </div>
+            <p class="opis">${esc(z.description)}</p>
+            <div class="oznake">
+                <span class="oznaka oznaka-siva">${esc(z.topic || '')}</span>
+                <span class="oznaka oznaka-plava">${z.broj_redaka} redaka u rezultatu</span>
+                <span class="oznaka oznaka-zelena">rješenje provjereno</span>
+            </div>
+
+            <details>
+                <summary>Prikaži referentno rješenje i rezultat</summary>
+                <div class="sql-kod razmak-s">${esc(z.solution_sql)}</div>
+                ${tablicaHtml(z.stupci, z.primjer_redaka, z.broj_redaka)}
+            </details>
+
+            ${z.hint ? `<p class="prigusen sitno" style="margin-top:10px">💡 ${esc(z.hint)}</p>` : ''}
+
+            <div class="flex-red" style="margin-top:14px">
+                <button class="btn btn-uspjeh btn-mali" onclick="spremi(${i})">Spremi u zadatke</button>
+                <button class="btn btn-sporedni btn-mali" onclick="odbaci(${i})">Odbaci</button>
+            </div>
+        </div>`).join('');
+}
+
+async function spremi(i) {
+    const z = generirani[i];
+    const kartica = document.getElementById(`zadatak-${i}`);
+
+    try {
+        const r = await apiPost('/api/save-task', {
+            schema_id: z.schema_id,
+            title: z.title,
+            description: z.description,
+            difficulty: z.difficulty,
+            topic: z.topic,
+            solution_sql: z.solution_sql,
+            hint: z.hint,
+        });
+        kartica.classList.add('spremljen');
+        kartica.querySelector('.flex-red').innerHTML =
+            `<span class="oznaka oznaka-zelena">✓ Spremljeno</span>
+             <a href="/tasks/${r.task_id}" class="btn btn-sporedni btn-mali">Otvori zadatak</a>`;
+    } catch (e) {
+        poruka('poruka', e.message, 'greska');
+    }
+}
+
+function odbaci(i) {
+    document.getElementById(`zadatak-${i}`).remove();
+}
+
+document.getElementById('gumb').addEventListener('click', generiraj);
+</script>
+{% endblock %}

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block naslov %}Nadzorna ploča — {{ app_name }}{% endblock %}
+
+{% block sadrzaj %}
+<div class="zaglavlje-stranice">
+    <h1>Dobrodošli, {{ user.username }}!</h1>
+    <p>Odaberite čime želite nastaviti.</p>
+</div>
+
+<div class="stat-mreza" id="brzaStatistika">
+    <div class="stat"><div class="stat-broj">—</div><div class="stat-oznaka">Riješeno zadataka</div></div>
+    <div class="stat"><div class="stat-broj">—</div><div class="stat-oznaka">Ukupno predaja</div></div>
+    <div class="stat"><div class="stat-broj">—</div><div class="stat-oznaka">Točnost</div></div>
+    <div class="stat"><div class="stat-broj">—</div><div class="stat-oznaka">Napredak</div></div>
+</div>
+
+<div class="mreza">
+    <a href="/tasks" class="kartica-akcija">
+        <div class="kartica-ikona">📝</div>
+        <h3>SQL zadaci</h3>
+        <p>Riješite zadatke različitih razina težine i dobijte trenutnu povratnu
+           informaciju o svom upitu.</p>
+        <span class="oznaka oznaka-plava" style="margin-top:12px">Vježbaj</span>
+    </a>
+
+    <a href="/generate" class="kartica-akcija">
+        <div class="kartica-ikona">⚡</div>
+        <h3>Generiraj zadatke</h3>
+        <p>Neka umjetna inteligencija složi nove zadatke prema temi i razini
+           koju odaberete.</p>
+        <span class="oznaka oznaka-zelena" style="margin-top:12px">AI</span>
+    </a>
+
+    <a href="/chat" class="kartica-akcija">
+        <div class="kartica-ikona">🤖</div>
+        <h3>AI tutor</h3>
+        <p>Postavite pitanje tutoru koji objašnjava koncepte i vodi vas prema
+           rješenju bez da ga otkrije.</p>
+        <span class="oznaka oznaka-ljubicasta" style="margin-top:12px">Tutor</span>
+    </a>
+
+    <a href="/progress" class="kartica-akcija">
+        <div class="kartica-ikona">📊</div>
+        <h3>Moj napredak</h3>
+        <p>Pregledajte statistiku uspješnosti po temama, razinama težine i
+           shemama baza.</p>
+        <span class="oznaka oznaka-zuta" style="margin-top:12px">Statistika</span>
+    </a>
+
+    <a href="/survey" class="kartica-akcija">
+        <div class="kartica-ikona">🗳️</div>
+        <h3>Anketa</h3>
+        <p>Ocijenite sustav i pomozite u evaluaciji njegove učinkovitosti.</p>
+        <span class="oznaka oznaka-siva" style="margin-top:12px">Evaluacija</span>
+    </a>
+
+    {% if user.role == 'nastavnik' %}
+    <a href="/admin" class="kartica-akcija">
+        <div class="kartica-ikona">🧑‍🏫</div>
+        <h3>Nastavnički panel</h3>
+        <p>Pregled rezultata studenata, uspješnosti po zadacima i rezultata
+           ankete.</p>
+        <span class="oznaka oznaka-ljubicasta" style="margin-top:12px">Nastavnik</span>
+    </a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block skripta %}
+<script>
+(async () => {
+    try {
+        const p = await apiGet('/api/progress');
+        const s = p.sazetak;
+        document.getElementById('brzaStatistika').innerHTML = `
+            <div class="stat">
+                <div class="stat-broj">${s.rijeseno_zadataka}/${s.ukupno_zadataka}</div>
+                <div class="stat-oznaka">Riješeno zadataka</div>
+            </div>
+            <div class="stat">
+                <div class="stat-broj">${s.ukupno_predaja}</div>
+                <div class="stat-oznaka">Ukupno predaja</div>
+            </div>
+            <div class="stat">
+                <div class="stat-broj">${s.postotak_tocnosti}%</div>
+                <div class="stat-oznaka">Točnost predaja</div>
+            </div>
+            <div class="stat">
+                <div class="stat-broj">${s.postotak_rijesenih}%</div>
+                <div class="stat-oznaka">Ukupni napredak</div>
+            </div>`;
+    } catch (e) {
+        document.getElementById('brzaStatistika').classList.add('skriveno');
+    }
+})();
+</script>
+{% endblock %}

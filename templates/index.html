@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block naslov %}{{ app_name }} — Nauči SQL uz umjetnu inteligenciju{% endblock %}
+
+{% block stil %}
+<style>
+    .naslovnica {
+        text-align: center;
+        padding: 56px 0 40px;
+    }
+    .naslovnica h1 {
+        font-size: 3rem;
+        color: var(--naglasak);
+        margin-bottom: 12px;
+        line-height: 1.2;
+    }
+    .naslovnica .podnaslov {
+        color: var(--tekst-prigusen);
+        font-size: 1.15rem;
+        max-width: 620px;
+        margin: 0 auto 32px;
+    }
+    .mogucnost {
+        background: var(--povrsina);
+        border: 1px solid var(--rub);
+        border-radius: var(--radijus);
+        padding: 24px;
+        text-align: left;
+    }
+    .mogucnost .ikona { font-size: 2rem; margin-bottom: 10px; }
+    .mogucnost h3 { color: var(--naglasak); font-size: 1.05rem; margin-bottom: 6px; }
+    .mogucnost p { color: var(--tekst-prigusen); font-size: 0.92rem; }
+    .demo-racuni {
+        margin-top: 40px;
+        font-size: 0.88rem;
+        color: var(--tekst-prigusen);
+    }
+    .demo-racuni code {
+        font-family: var(--mono);
+        background: var(--povrsina-2);
+        padding: 2px 7px;
+        border-radius: 4px;
+        color: var(--naglasak);
+    }
+</style>
+{% endblock %}
+
+{% block sadrzaj %}
+<div class="naslovnica">
+    <h1>🎓 SQL Tutor</h1>
+    <p class="podnaslov">
+        Interaktivna platforma za učenje SQL-a u kojoj umjetna inteligencija generira
+        zadatke, analizira vaša rješenja i vodi vas kroz gradivo — bez gotovih odgovora.
+    </p>
+    <div class="flex-red" style="justify-content:center">
+        <a href="/register" class="btn">Registrirajte se</a>
+        <a href="/login" class="btn btn-sporedni">Prijava</a>
+    </div>
+</div>
+
+<div class="mreza razmak-l">
+    <div class="mogucnost">
+        <div class="ikona">📝</div>
+        <h3>Zadaci s trenutnom provjerom</h3>
+        <p>Pišite upite u ugrađenom uređivaču i odmah vidite rezultat te je li
+           rješenje točno. Rade se nad stvarnim bazama u memoriji.</p>
+    </div>
+    <div class="mogucnost">
+        <div class="ikona">⚡</div>
+        <h3>AI generiranje zadataka</h3>
+        <p>Odaberite temu i razinu težine, a jezični model generira nove zadatke.
+           Svako rješenje automatski se provjerava prije spremanja.</p>
+    </div>
+    <div class="mogucnost">
+        <div class="ikona">🤖</div>
+        <h3>Sokratski tutor</h3>
+        <p>Chatbot koji ne daje gotova rješenja nego potpitanjima vodi prema
+           odgovoru i objašnjava koncepte na hrvatskom jeziku.</p>
+    </div>
+    <div class="mogucnost">
+        <div class="ikona">📊</div>
+        <h3>Praćenje napretka</h3>
+        <p>Statistika uspješnosti po temama, razinama težine i shemama baza
+           pokazuje gdje ste jaki, a gdje treba vježbati.</p>
+    </div>
+</div>
+
+<div class="centar demo-racuni">
+    Za brzo isprobavanje dostupni su demo računi:
+    <code>student / student123</code> i <code>nastavnik / nastavnik123</code>
+</div>
+{% endblock %}

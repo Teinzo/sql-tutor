@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block naslov %}AI tutor — {{ app_name }}{% endblock %}
+
+{% block stil %}
+<style>
+    .chat-omot {
+        max-width: 860px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 210px);
+        min-height: 440px;
+    }
+
+    .chat-vrh {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+    .chat-vrh select { width: auto; min-width: 190px; }
+
+    .poruke {
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 4px 4px 16px;
+    }
+
+    .red-poruke { display: flex; gap: 10px; align-items: flex-start; }
+    .red-poruke.korisnik { flex-direction: row-reverse; }
+
+    .avatar {
+        width: 34px; height: 34px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.05rem;
+        flex-shrink: 0;
+    }
+    .avatar.bot { background: #ede9fe; }
+    .avatar.korisnik { background: var(--povrsina-2); }
+
+    .mjehuric {
+        max-width: 74%;
+        padding: 12px 16px;
+        border-radius: var(--radijus);
+        line-height: 1.62;
+        font-size: 0.94rem;
+    }
+    .red-poruke.bot .mjehuric {
+        background: var(--povrsina);
+        border: 1px solid var(--rub);
+    }
+    .red-poruke.korisnik .mjehuric {
+        background: #0c4a6e;
+        color: #e0f2fe;
+    }
+
+    .prijedlozi { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .prijedlog {
+        background: var(--povrsina);
+        border: 1px solid var(--rub);
+        color: var(--tekst-prigusen);
+        border-radius: 99px;
+        padding: 6px 14px;
+        font-size: 0.84rem;
+        cursor: pointer;
+        font-family: inherit;
+        transition: border-color 0.15s, color 0.15s;
+    }
+    .prijedlog:hover { border-color: var(--naglasak); color: var(--tekst); }
+
+    .unos {
+        display: flex;
+        gap: 10px;
+        background: var(--povrsina);
+        border: 1px solid var(--rub);
+        border-radius: var(--radijus);
+        padding: 10px;
+    }
+    .unos input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        padding: 4px 6px;
+    }
+    .unos input:focus { border: none; }
+
+    .pise { color: var(--tekst-prigusen); font-style: italic; font-size: 0.87rem; padding-left: 46px; }
+</style>
+{% endblock %}
+
+{% block sadrzaj %}
+<div class="chat-omot">
+    <div class="chat-vrh">
+        <div>
+            <h1 style="font-size:1.35rem">🤖 AI tutor</h1>
+            <p class="prigusen sitno">Tutor vas vodi prema rješenju — neće ga otkriti umjesto vas.</p>
+        </div>
+        <div>
+            <label for="shema" class="prigusen sitno">Kontekst sheme</label>
+            <select id="shema">
+                <option value="">Bez konteksta</option>
+                {% for s in sheme %}
+                <option value="{{ s.id }}">{{ s.ikona }} {{ s.naziv }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div id="poruka" class="skriveno"></div>
+
+    <div class="poruke" id="poruke">
+        <div class="red-poruke bot">
+            <div class="avatar bot">🤖</div>
+            <div class="mjehuric">
+                Pozdrav! Ja sam vaš AI tutor za SQL. Pitajte me bilo što o SQL-u —
+                objasnit ću koncepte, pomoći s greškama i voditi vas kroz zadatke.
+                Neću vam dati gotov upit, ali ću vas navesti na rješenje. Što vas zanima?
+            </div>
+        </div>
+    </div>
+
+    <div class="pise skriveno" id="pise">🤖 Tutor piše…</div>
+
+    <div class="prijedlozi" id="prijedlozi">
+        <button class="prijedlog">Koja je razlika između WHERE i HAVING?</button>
+        <button class="prijedlog">Kako radi INNER JOIN?</button>
+        <button class="prijedlog">Zašto moj GROUP BY ne radi?</button>
+        <button class="prijedlog">Što znači NULL u SQL-u?</button>
+    </div>
+
+    <div class="unos">
+        <input type="text" id="unos" placeholder="Pitajte nešto o SQL-u…" autocomplete="off">
+        <button class="btn" id="gumb">Pošalji</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block skripta %}
+<script>
+let povijest = [];
+
+function dodajPoruku(uloga, tekst) {
+    const kontejner = document.getElementById('poruke');
+    const div = document.createElement('div');
+    div.className = `red-poruke ${uloga === 'korisnik' ? 'korisnik' : 'bot'}`;
+    div.innerHTML = `
+        <div class="avatar ${uloga === 'korisnik' ? 'korisnik' : 'bot'}">
+            ${uloga === 'korisnik' ? '👤' : '🤖'}</div>
+        <div class="mjehuric">${tekstUHtml(tekst)}</div>`;
+    kontejner.appendChild(div);
+    kontejner.scrollTop = kontejner.scrollHeight;
+}
+
+async function posalji(tekstIzvana) {
+    const unos = document.getElementById('unos');
+    const tekst = (tekstIzvana || unos.value).trim();
+    if (!tekst) return;
+
+    dodajPoruku('korisnik', tekst);
+    unos.value = '';
+    poruka('poruka', '');
+    document.getElementById('prijedlozi').classList.add('skriveno');
+
+    const gumb = document.getElementById('gumb');
+    gumb.disabled = true;
+    document.getElementById('pise').classList.remove('skriveno');
+
+    povijest.push({ role: 'user', content: tekst });
+
+    try {
+        const r = await apiPost('/api/chat', {
+            message: tekst,
+            history: povijest.slice(0, -1),
+            schema_id: document.getElementById('shema').value || null,
+        });
+        dodajPoruku('bot', r.response);
+        povijest.push({ role: 'assistant', content: r.response });
+    } catch (e) {
+        poruka('poruka', e.message, 'greska');
+        povijest.pop();
+    }
+
+    gumb.disabled = false;
+    document.getElementById('pise').classList.add('skriveno');
+    unos.focus();
+}
+
+document.getElementById('gumb').addEventListener('click', () => posalji());
+document.getElementById('unos').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') posalji();
+});
+document.querySelectorAll('.prijedlog').forEach((b) => {
+    b.addEventListener('click', () => posalji(b.textContent));
+});
+</script>
+{% endblock %}

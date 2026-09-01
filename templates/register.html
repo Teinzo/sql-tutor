@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block naslov %}Registracija — {{ app_name }}{% endblock %}
+{% block sirina %}sadrzaj-usko{% endblock %}
+
+{% block stil %}
+<style>
+    .obrazac-omot { max-width: 400px; margin: 48px auto 0; }
+    .obrazac-omot .brand-veliki {
+        text-align: center;
+        font-size: 1.8rem;
+        color: var(--naglasak);
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .obrazac-omot .podnaslov {
+        text-align: center;
+        color: var(--tekst-prigusen);
+        margin-bottom: 28px;
+        font-size: 0.95rem;
+    }
+    .veza-dolje { text-align: center; margin-top: 18px; font-size: 0.9rem; color: var(--tekst-prigusen); }
+    .veza-dolje a { color: var(--naglasak); text-decoration: none; }
+    .veza-dolje a:hover { text-decoration: underline; }
+    .pomoc { font-size: 0.8rem; color: var(--tekst-prigusen); margin-top: 4px; }
+</style>
+{% endblock %}
+
+{% block sadrzaj %}
+<div class="obrazac-omot">
+    <div class="brand-veliki">🎓 SQL Tutor</div>
+    <p class="podnaslov">Otvorite račun i počnite vježbati</p>
+
+    <div class="kartica">
+        <div id="poruka" class="skriveno"></div>
+
+        <form id="obrazac" autocomplete="on">
+            <div class="polje">
+                <label for="username">Korisničko ime</label>
+                <input type="text" id="username" name="username" required
+                       minlength="3" maxlength="30" autocomplete="username"
+                       placeholder="npr. ivan.horvat">
+                <div class="pomoc">3–30 znakova: slova, brojevi, točka, crtica ili podvlaka.</div>
+            </div>
+
+            <div class="polje">
+                <label for="password">Lozinka</label>
+                <input type="password" id="password" name="password" required
+                       minlength="6" autocomplete="new-password" placeholder="••••••••">
+                <div class="pomoc">Najmanje 6 znakova.</div>
+            </div>
+
+            <div class="polje">
+                <label for="password2">Ponovite lozinku</label>
+                <input type="password" id="password2" name="password2" required
+                       minlength="6" autocomplete="new-password" placeholder="••••••••">
+            </div>
+
+            <button type="submit" class="btn btn-blok" id="gumb">Registracija</button>
+        </form>
+
+        <p class="veza-dolje">
+            Već imate račun? <a href="/login">Prijavite se</a>
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block skripta %}
+<script>
+document.getElementById('obrazac').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    poruka('poruka', '');
+
+    const lozinka  = document.getElementById('password').value;
+    const lozinka2 = document.getElementById('password2').value;
+
+    if (lozinka !== lozinka2) {
+        poruka('poruka', 'Lozinke se ne podudaraju.', 'greska');
+        return;
+    }
+
+    const gumb = document.getElementById('gumb');
+    gumb.disabled = true;
+    gumb.innerHTML = '<span class="vrtnja"></span> Kreiranje računa...';
+
+    try {
+        await apiPost('/api/register', {
+            username: document.getElementById('username').value.trim(),
+            password: lozinka,
+        });
+        window.location.href = '/dashboard';
+    } catch (err) {
+        poruka('poruka', err.message, 'greska');
+        gumb.disabled = false;
+        gumb.textContent = 'Registracija';
+    }
+});
+</script>
+{% endblock %}

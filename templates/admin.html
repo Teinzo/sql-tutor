@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block naslov %}Nastavnički panel — {{ app_name }}{% endblock %}
+
+{% block stil %}
+<style>
+    .kartice-jezicci {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--rub);
+        margin-bottom: 22px;
+        flex-wrap: wrap;
+    }
+    .jezicac {
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: var(--tekst-prigusen);
+        padding: 10px 18px;
+        font-size: 0.93rem;
+        font-family: inherit;
+        cursor: pointer;
+        transition: color 0.15s, border-color 0.15s;
+    }
+    .jezicac:hover { color: var(--tekst); }
+    .jezicac.aktivan { color: var(--naglasak); border-bottom-color: var(--naglasak); }
+
+    .komentar {
+        background: var(--povrsina-2);
+        border-left: 3px solid var(--naglasak);
+        border-radius: var(--radijus-s);
+        padding: 12px 14px;
+        margin-bottom: 10px;
+        font-size: 0.9rem;
+    }
+    .komentar .datum { color: var(--tekst-prigusen); font-size: 0.78rem; margin-top: 6px; }
+
+    .zvjezdice { color: var(--upozorenje); letter-spacing: 2px; }
+</style>
+{% endblock %}
+
+{% block sadrzaj %}
+<div class="zaglavlje-stranice">
+    <h1>🧑‍🏫 Nastavnički panel</h1>
+    <p>Pregled korištenja sustava, rezultata studenata i evaluacije.</p>
+</div>
+
+<div id="poruka" class="skriveno"></div>
+
+<div class="stat-mreza" id="pregled"></div>
+
+<div class="kartice-jezicci">
+    <button class="jezicac aktivan" data-cilj="studenti">Studenti</button>
+    <button class="jezicac" data-cilj="zadaci">Zadaci</button>
+    <button class="jezicac" data-cilj="anketa">Rezultati ankete</button>
+</div>
+
+<div id="studenti" class="panel"></div>
+<div id="zadaci" class="panel skriveno"></div>
+<div id="anketa" class="panel skriveno"></div>
+{% endblock %}
+
+{% block skripta %}
+<script>
+/* ------------------------------------------------------------- jezičci */
+document.querySelectorAll('.jezicac').forEach((j) => {
+    j.addEventListener('click', () => {
+        document.querySelectorAll('.jezicac').forEach((x) => x.classList.remove('aktivan'));
+        document.querySelectorAll('.panel').forEach((x) => x.classList.add('skriveno'));
+        j.classList.add('aktivan');
+        document.getElementById(j.dataset.cilj).classList.remove('skriveno');
+    });
+});
+
+function zvjezdice(ocjena) {
+    if (ocjena === null || ocjena === undefined) return '—';
+    const pune = Math.round(ocjena);
+    return `<span class="zvjezdice">${'★'.repeat(pune)}${'☆'.repeat(5 - pune)}</span>
+            <span class="prigusen sitno"> ${ocjena.toFixed(2)}</span>`;
+}
+
+/* ------------------------------------------------------------- učitavanje */
+(async () => {
+    try {
+        const o = await apiGet('/api/admin/overview');
+        document.getElementById('pregled').innerHTML = `
+            <div class="stat"><div class="stat-broj">${o.studenata}</div>
+                <div class="stat-oznaka">Studenata</div></div>
+            <div class="stat"><div class="stat-broj">${o.zadataka}</div>
+                <div class="stat-oznaka">Zadataka (${o.ai_zadataka} AI)</div></div>
+            <div class="stat"><div class="stat-broj">${o.predaja}</div>
+                <div class="stat-oznaka">Predanih rješenja</div></div>
+            <div class="stat"><div class="stat-broj">${o.postotak_tocnosti}%</div>
+                <div class="stat-oznaka">Prosječna točnost</div></div>
+            <div class="stat"><div class="stat-broj">${o.pitanja_tutoru}</div>
+                <div class="stat-oznaka">Pitanja AI tutoru</div></div>
+            <div class="stat"><div class="stat-broj">${o.ispunjenih_anketa}</div>
+                <div class="stat-oznaka">Ispunjenih anketa</div></div>`;
+    } catch (e) {
+        poruka('poruka', e.message, 'greska');
+        return;
+    }
+
+    /* --- studenti --- */
+    try {
+        const s = await apiGet('/api/admin/students');
+        document.getElementById('studenti').innerHTML = s.students.length
+            ? `<div class="tablica-omot"><table>
+                <thead><tr>
+                    <th>Student</th><th>Riješeno zadataka</th><th>Predaja</th>
+                    <th>Točnih</th><th>Točnost</th><th>Zadnja aktivnost</th>
+                </tr></thead>
+                <tbody>${s.students.map((r) => `
+                    <tr>
+                        <td><strong>${esc(r.username)}</strong></td>
+                        <td>${r.rijesenih_zadataka}</td>
+                        <td>${r.predaja}</td>
+                        <td>${r.tocnih}</td>
+                        <td><span class="oznaka ${r.postotak_tocnosti >= 60 ? 'oznaka-zelena'
+                            : r.postotak_tocnosti >= 30 ? 'oznaka-zuta' : 'oznaka-crvena'}">
+                            ${r.postotak_tocnosti}%</span></td>
+                        <td class="prigusen">${r.zadnja_aktivnost ? datumHr(r.zadnja_aktivnost) : '—'}</td>
+                    </tr>`).join('')}</tbody></table></div>`
+            : '<div class="prazno"><p>Još nema registriranih studenata.</p></div>';
+    } catch (e) {
+        document.getElementById('studenti').innerHTML =
+            `<div class="poruka poruka-greska">${esc(e.message)}</div>`;
+    }
+
+    /* --- zadaci --- */
+    try {
+        const z = await apiGet('/api/admin/task-stats');
+        document.getElementById('zadaci').innerHTML = `
+            <p class="prigusen sitno razmak-s">
+                Niska točnost može značiti da je zadatak prezahtjevan ili nejasno formuliran.</p>
+            <div class="tablica-omot"><table>
+                <thead><tr>
+                    <th>Zadatak</th><th>Shema</th><th>Težina</th>
+                    <th>Pokušaja</th><th>Studenata</th><th>Točnost</th><th></th>
+                </tr></thead>
+                <tbody>${z.tasks.map((r) => `
+                    <tr>
+                        <td>${esc(r.title)} ${r.ai_generated
+                            ? '<span class="oznaka oznaka-ljubicasta">AI</span>' : ''}</td>
+                        <td class="prigusen">${esc(r.schema_naziv)}</td>
+                        <td><span class="oznaka ${oznakaTezine(r.difficulty)}">${esc(r.difficulty)}</span></td>
+                        <td>${r.pokusaja}</td>
+                        <td>${r.studenata}</td>
+                        <td>${r.postotak_tocnosti === null ? '<span class="prigusen">—</span>'
+                            : `<span class="oznaka ${r.postotak_tocnosti >= 60 ? 'oznaka-zelena'
+                                : r.postotak_tocnosti >= 30 ? 'oznaka-zuta' : 'oznaka-crvena'}">
+                                ${r.postotak_tocnosti}%</span>`}</td>
+                        <td><button class="btn btn-opasnost btn-mali"
+                                onclick="obrisi(${r.id}, this)">Obriši</button></td>
+                    </tr>`).join('')}</tbody></table></div>`;
+    } catch (e) {
+        document.getElementById('zadaci').innerHTML =
+            `<div class="poruka poruka-greska">${esc(e.message)}</div>`;
+    }
+
+    /* --- anketa --- */
+    try {
+        const a = await apiGet('/api/admin/survey-results');
+
+        if (a.broj_odgovora === 0) {
+            document.getElementById('anketa').innerHTML =
+                '<div class="prazno"><div class="ikona">🗳️</div><p>Anketu još nitko nije ispunio.</p></div>';
+        } else {
+            const p = a.prosjeci;
+            document.getElementById('anketa').innerHTML = `
+                <p class="prigusen sitno razmak-m">Broj odgovora: <strong>${a.broj_odgovora}</strong></p>
+
+                <div class="kartica razmak-m">
+                    <h2 class="kartica-h">Prosječne ocjene (1–5)</h2>
+                    <div class="tablica-omot"><table><tbody>
+                        <tr><td>Korisnost sustava za učenje SQL-a</td><td>${zvjezdice(p.korisnost)}</td></tr>
+                        <tr><td>Jasnoća zadataka i povratnih informacija</td><td>${zvjezdice(p.jasnoca)}</td></tr>
+                        <tr><td>Kvaliteta AI tutora</td><td>${zvjezdice(p.kvaliteta_ai)}</td></tr>
+                        <tr><td>Preglednost sučelja</td><td>${zvjezdice(p.sucelje)}</td></tr>
+                        <tr><td>Spremnost preporuke drugima</td><td>${zvjezdice(p.preporuka)}</td></tr>
+                    </tbody></table></div>
+                </div>
+
+                <div class="kartica razmak-m">
+                    <h2 class="kartica-h">Raspodjela ocjene preporuke</h2>
+                    ${[1,2,3,4,5].map((o) => {
+                        const red = a.raspodjela_preporuke.find((x) => x.ocjena === o);
+                        const broj = red ? red.broj : 0;
+                        const post = Math.round(broj / a.broj_odgovora * 100);
+                        return `<div class="traka-red">
+                            <span class="oznaka-tekst">${o} ${'★'.repeat(o)}</span>
+                            <div class="traka"><div class="traka-ispuna" style="width:${post}%"></div></div>
+                            <span class="vrijednost">${broj}</span>
+                        </div>`;
+                    }).join('')}
+                </div>
+
+                <div class="kartica">
+                    <h2 class="kartica-h">Komentari studenata</h2>
+                    ${a.komentari.length
+                        ? a.komentari.map((k) => `<div class="komentar">
+                            ${tekstUHtml(k.komentar)}
+                            <div class="datum">${datumHr(k.created_at)}</div></div>`).join('')
+                        : '<p class="prigusen sitno">Nema pisanih komentara.</p>'}
+                </div>`;
+        }
+    } catch (e) {
+        document.getElementById('anketa').innerHTML =
+            `<div class="poruka poruka-greska">${esc(e.message)}</div>`;
+    }
+})();
+
+async function obrisi(id, gumb) {
+    if (!confirm('Obrisati ovaj zadatak i sve predane pokušaje?')) return;
+    gumb.disabled = true;
+    try {
+        await apiDelete(`/api/tasks/${id}`);
+        gumb.closest('tr').remove();
+    } catch (e) {
+        poruka('poruka', e.message, 'greska');
+        gumb.disabled = false;
+    }
+}
+</script>
+{% endblock %}

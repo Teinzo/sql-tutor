@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block naslov %}{{ app_name }}{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128220;</text></svg>">
+    {% block stil %}{% endblock %}
+</head>
+<body>
+
+{% if user %}
+<nav class="navbar">
+    <div class="navbar-inner">
+        <a href="/dashboard" class="brand">🎓 SQL Tutor</a>
+        <div class="nav-links">
+            <a href="/tasks">Zadaci</a>
+            <a href="/generate">Generiraj</a>
+            <a href="/chat">AI tutor</a>
+            <a href="/progress">Napredak</a>
+            <a href="/survey">Anketa</a>
+            {% if user.role == 'nastavnik' %}
+            <a href="/admin">Nastavnik</a>
+            {% endif %}
+        </div>
+        <div class="nav-user">
+            <span>{{ user.username }}
+                {% if user.role == 'nastavnik' %}
+                <span class="oznaka oznaka-ljubicasta">nastavnik</span>
+                {% endif %}
+            </span>
+            <button class="btn btn-sporedni btn-mali" onclick="odjava()">Odjava</button>
+        </div>
+    </div>
+</nav>
+{% endif %}
+
+<main class="sadrzaj {% block sirina %}{% endblock %}">
+    {% if user and not ai_dostupan %}
+    <div class="poruka poruka-upozorenje">
+        AI funkcionalnosti trenutno nisu dostupne jer <code>OPENAI_API_KEY</code>
+        nije postavljen u <code>.env</code> datoteci. Zadaci i provjera rješenja rade normalno.
+    </div>
+    {% endif %}
+    {% block sadrzaj %}{% endblock %}
+</main>
+
+<footer>
+    {{ app_name }} &middot; Završni rad &middot; Web aplikacija za učenje SQL-a
+    temeljena na umjetnoj inteligenciji
+</footer>
+
+<script src="/static/js/app.js"></script>
+{% block skripta %}{% endblock %}
+</body>
+</html>

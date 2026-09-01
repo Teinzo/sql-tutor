@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+
+{% block naslov %}Zadatak — {{ app_name }}{% endblock %}
+
+{% block stil %}
+<style>
+    .raspored {
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        gap: 20px;
+        align-items: start;
+    }
+    @media (max-width: 980px) {
+        .raspored { grid-template-columns: 1fr; }
+    }
+
+    .zadatak-opis {
+        background: var(--povrsina);
+        border: 1px solid var(--rub);
+        border-radius: var(--radijus);
+        padding: 22px;
+        margin-bottom: 18px;
+    }
+    .zadatak-opis h1 { font-size: 1.35rem; margin-bottom: 10px; }
+    .zadatak-opis .tekst { color: var(--tekst); margin-bottom: 14px; }
+
+    .alatna-traka {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+    }
+
+    .rezultat-blok { margin-top: 18px; }
+
+    .ai-povratna {
+        background: rgba(167, 139, 250, 0.08);
+        border: 1px solid var(--ljubicasta);
+        border-radius: var(--radijus-s);
+        padding: 14px 16px;
+        margin-top: 14px;
+    }
+    .ai-povratna .zaglavlje {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--ljubicasta);
+        font-weight: 600;
+        font-size: 0.88rem;
+        margin-bottom: 8px;
+    }
+    .ai-povratna .sadrzaj-ai { color: var(--tekst); font-size: 0.93rem; line-height: 1.65; }
+
+    /* Bočni pregled sheme */
+    .tablica-shema { margin-bottom: 14px; }
+    .tablica-shema .naziv {
+        font-family: var(--mono);
+        color: var(--naglasak);
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 4px;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .tablica-shema .naziv .broj { color: var(--tekst-prigusen); font-weight: 400; font-size: 0.8rem; }
+    .tablica-shema .stupci {
+        font-family: var(--mono);
+        font-size: 0.79rem;
+        color: var(--tekst-prigusen);
+        line-height: 1.7;
+        padding-left: 10px;
+        border-left: 2px solid var(--rub);
+    }
+
+    .pokusaj {
+        border: 1px solid var(--rub);
+        border-radius: var(--radijus-s);
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        font-size: 0.84rem;
+    }
+    .pokusaj .vrh { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .pokusaj pre {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        color: #0c4a6e;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+</style>
+{% endblock %}
+
+{% block sadrzaj %}
+<a href="/tasks" class="btn btn-sporedni btn-mali razmak-m">← Natrag na zadatke</a>
+
+<div id="poruka" class="skriveno"></div>
+
+<div class="raspored">
+    <!-- ============================ GLAVNI STUPAC ============================ -->
+    <div>
+        <div class="zadatak-opis" id="opisZadatka">
+            <div class="prazno"><span class="vrtnja"></span><p>Učitavanje…</p></div>
+        </div>
+
+        <div class="kartica">
+            <div class="flex-izmedu razmak-s">
+                <h2 class="kartica-h" style="margin:0">Vaš SQL upit</h2>
+                <span class="prigusen sitno"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> za izvršavanje</span>
+            </div>
+
+            <textarea id="editor" class="sql-editor"
+                      placeholder="SELECT ime, prezime&#10;FROM studenti&#10;WHERE ...&#10;ORDER BY ..." spellcheck="false"></textarea>
+
+            <div class="alatna-traka">
+                <button class="btn btn-sporedni" id="gumbIzvrsi">▶ Izvrši upit</button>
+                <button class="btn" id="gumbPredaj">✓ Predaj rješenje</button>
+                <button class="btn btn-sporedni" id="gumbUputa">💡 Uputa</button>
+                <button class="btn btn-sporedni" id="gumbOcisti">Očisti</button>
+            </div>
+
+            <div id="uputa" class="skriveno"></div>
+            <div id="rezultat" class="rezultat-blok"></div>
+        </div>
+    </div>
+
+    <!-- ============================= BOČNI STUPAC ============================ -->
+    <div>
+        <div class="kartica razmak-m">
+            <h2 class="kartica-h">🗄️ Struktura baze</h2>
+            <div id="shema"><span class="vrtnja"></span></div>
+            <button class="btn btn-sporedni btn-mali btn-blok" id="gumbPodaci"
+                    style="margin-top:10px">Prikaži primjer podataka</button>
+        </div>
+
+        <div class="kartica">
+            <h2 class="kartica-h">🕘 Vaši pokušaji</h2>
+            <div id="pokusaji" class="prigusen sitno">—</div>
+        </div>
+    </div>
+</div>
+
+<!-- Prikaz primjera podataka -->
+<div id="primjerPodataka" class="kartica skriveno" style="margin-top:20px"></div>
+{% endblock %}
+
+{% block skripta %}
+<script>
+const TASK_ID = {{ task_id }};
+let zadatak = null;
+let shemaId = null;
+
+const editor = document.getElementById('editor');
+omoguciTabUEditoru(editor);
+
+/* ------------------------------------------------------------- učitavanje */
+async function ucitaj() {
+    try {
+        const podaci = await apiGet(`/api/tasks/${TASK_ID}`);
+        zadatak = podaci.task;
+        shemaId = zadatak.schema_id;
+
+        document.getElementById('opisZadatka').innerHTML = `
+            <div class="flex-izmedu razmak-s">
+                <h1>${esc(zadatak.title)}</h1>
+                <span class="oznaka ${oznakaTezine(zadatak.difficulty)}">${esc(zadatak.difficulty)}</span>
+            </div>
+            <p class="tekst">${esc(zadatak.description)}</p>
+            <div class="flex-red">
+                <span class="oznaka oznaka-siva">${esc(podaci.schema.ikona)} ${esc(podaci.schema.naziv)}</span>
+                ${zadatak.topic ? `<span class="oznaka oznaka-plava">${esc(zadatak.topic)}</span>` : ''}
+                ${zadatak.ai_generated ? '<span class="oznaka oznaka-ljubicasta">AI generiran</span>' : ''}
+            </div>
+            ${zadatak.solution_sql ? `
+                <details style="margin-top:14px">
+                    <summary class="prigusen sitno" style="cursor:pointer">
+                        Referentno rješenje (vidljivo samo nastavniku)</summary>
+                    <div class="sql-kod" style="margin-top:8px">${esc(zadatak.solution_sql)}</div>
+                </details>` : ''}`;
+
+        prikaziShemu(podaci.schema);
+        prikaziPokusaje(podaci.attempts);
+    } catch (e) {
+        poruka('poruka', e.message, 'greska');
+        document.getElementById('opisZadatka').innerHTML =
+            '<p class="prigusen">Zadatak nije moguće učitati.</p>';
+    }
+}
+
+function prikaziShemu(shema) {
+    document.getElementById('shema').innerHTML = Object.entries(shema.tablice)
+        .map(([tablica, stupci]) => `
+            <div class="tablica-shema">
+                <div class="naziv"><span>${esc(tablica)}</span></div>
+                <div class="stupci">${stupci.map(esc).join('<br>')}</div>
+            </div>`).join('');
+}
+
+function prikaziPokusaje(pokusaji) {
+    const el = document.getElementById('pokusaji');
+    if (!pokusaji || pokusaji.length === 0) {
+        el.innerHTML = '<p class="prigusen sitno">Još niste predali nijedno rješenje.</p>';
+        return;
+    }
+    el.innerHTML = pokusaji.map((p) => `
+        <div class="pokusaj">
+            <div class="vrh">
+                <span class="oznaka ${p.is_correct ? 'oznaka-zelena' : 'oznaka-crvena'}">
+                    ${p.is_correct ? 'točno' : 'netočno'}</span>
+                <span class="prigusen" style="font-size:0.76rem">${datumHr(p.submitted_at)}</span>
+            </div>
+            <pre>${esc(p.query)}</pre>
+        </div>`).join('');
+}
+
+/* -------------------------------------------------------------- izvršavanje */
+async function izvrsi() {
+    const upit = editor.value.trim();
+    if (!upit) { poruka('poruka', 'Upišite SQL upit.', 'upozorenje'); return; }
+
+    const gumb = document.getElementById('gumbIzvrsi');
+    gumb.disabled = true;
+    gumb.innerHTML = '<span class="vrtnja"></span> Izvršavanje…';
+    poruka('poruka', '');
+
+    try {
+        const r = await apiPost('/api/run', { schema_id: shemaId, query: upit });
+        document.getElementById('rezultat').innerHTML = r.uspjeh
+            ? `<div class="poruka poruka-info">Upit je izvršen — ${r.broj_redaka} redaka.</div>
+               ${tablicaHtml(r.stupci, r.redci, r.broj_redaka)}`
+            : `<div class="poruka poruka-greska">${esc(r.greska)}</div>`;
+    } catch (e) {
+        poruka('poruka', e.message, 'greska');
+    }
+
+    gumb.disabled = false;
+    gumb.innerHTML = '▶ Izvrši upit';
+}
+
+/* ------------------------------------------------------------------ predaja */
+async function predaj() {
+    const upit = editor.value.trim();
+    if (!upit) { poruka('poruka', 'Upišite SQL upit prije predaje.', 'upozorenje'); return; }
+
+    const gumb = document.getElementById('gumbPredaj');
+    gumb.disabled = true;
+    gumb.innerHTML = '<span class="vrtnja"></span> Provjera…';
+    poruka('poruka', '');
+
+    try {
+        const r = await apiPost('/api/submit', { task_id: TASK_ID, query: upit });
+
+        const vrsta = r.status === 'tocno' ? 'uspjeh'
+                    : r.status === 'greska' ? 'greska' : 'upozorenje';
+        const ikona = r.status === 'tocno' ? '✅'
+                    : r.status === 'greska' ? '⚠️' : '❌';
+
+        let html = `<div class="poruka poruka-${vrsta}">${ikona} ${esc(r.feedback)}</div>`;
+
+        if (r.ai_feedback) {
+            html += `<div class="ai-povratna">
+                <div class="zaglavlje">🤖 Objašnjenje AI tutora</div>
+                <div class="sadrzaj-ai">${tekstUHtml(r.ai_feedback)}</div>
+            </div>`;
+        } else if (r.ai_greska) {
+            html += `<div class="poruka poruka-upozorenje" style="margin-top:12px">
+                AI objašnjenje nije dostupno: ${esc(r.ai_greska)}</div>`;
+        }
+
+        if (r.status !== 'greska') {
+            html += `<div style="margin-top:14px">
+                ${tablicaHtml(r.stupci, r.redci, r.broj_redaka)}</div>`;
+        }
+
+        document.getElementById('rezultat').innerHTML = html;
+
+        // Osvježi popis pokušaja.
+        const podaci = await apiGet(`/api/tasks/${TASK_ID}`);
+        prikaziPokusaje(podaci.attempts);
+    } catch (e) {
+        poruka('poruka', e.message, 'greska');
+    }
+
+    gumb.disabled = false;
+    gumb.innerHTML = '✓ Predaj rješenje';
+}
+
+/* -------------------------------------------------------------------- uputa */
+async function prikaziUputu() {
+    const el = document.getElementById('uputa');
+    if (!el.classList.contains('skriveno')) {
+        el.classList.add('skriveno');
+        return;
+    }
+    try {
+        const r = await apiGet(`/api/tasks/${TASK_ID}/hint`);
+        el.className = 'poruka poruka-info';
+        el.style.marginTop = '14px';
+        el.innerHTML = `💡 ${esc(r.hint)}`;
+    } catch (e) {
+        poruka('poruka', e.message, 'greska');
+    }
+}
+
+/* ----------------------------------------------------------- primjer podataka */
+async function prikaziPodatke() {
+    const el = document.getElementById('primjerPodataka');
+    const gumb = document.getElementById('gumbPodaci');
+
+    if (!el.classList.contains('skriveno')) {
+        el.classList.add('skriveno');
+        gumb.textContent = 'Prikaži primjer podataka';
+        return;
+    }
+
+    gumb.disabled = true;
+    gumb.innerHTML = '<span class="vrtnja"></span> Učitavanje…';
+
+    try {
+        const r = await apiGet(`/api/schema-preview/${shemaId}`);
+        el.innerHTML = `<h2 class="kartica-h">📋 Primjer podataka — ${esc(r.schema)}</h2>`
+            + Object.entries(r.tablice).map(([tablica, p]) => `
+                <div style="margin-bottom:22px">
+                    <div class="flex-izmedu razmak-s">
+                        <strong style="font-family:var(--mono);color:var(--naglasak)">${esc(tablica)}</strong>
+                        <span class="prigusen sitno">${p.ukupno} redaka ukupno</span>
+                    </div>
+                    ${tablicaHtml(p.stupci, p.redci, p.ukupno)}
+                </div>`).join('');
+        el.classList.remove('skriveno');
+        gumb.textContent = 'Sakrij primjer podataka';
+    } catch (e) {
+        poruka('poruka', e.message, 'greska');
+        gumb.textContent = 'Prikaži primjer podataka';
+    }
+
+    gumb.disabled = false;
+}
+
+/* ------------------------------------------------------------------ događaji */
+document.getElementById('gumbIzvrsi').addEventListener('click', izvrsi);
+document.getElementById('gumbPredaj').addEventListener('click', predaj);
+document.getElementById('gumbUputa').addEventListener('click', prikaziUputu);
+document.getElementById('gumbPodaci').addEventListener('click', prikaziPodatke);
+document.getElementById('gumbOcisti').addEventListener('click', () => {
+    editor.value = '';
+    document.getElementById('rezultat').innerHTML = '';
+    editor.focus();
+});
+
+editor.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        izvrsi();
+    }
+});
+
+ucitaj();
+</script>
+{% endblock %}

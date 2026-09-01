@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.py[cod]
+.env
+*.db
+.pytest_cache/
+.vscode/
+.idea/
+
+# Radni materijali za pisanje zavrsnog rada - nisu dio aplikacije.
+zavrsni-rad-kostur.md
+Zavrsni-rad-SQL-Tutor.html
+evaluacija_rezultati.csv

@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block naslov %}Zadaci — {{ app_name }}{% endblock %}
+
+{% block stil %}
+<style>
+    .filteri {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        margin-bottom: 24px;
+    }
+    .filteri .polje { margin-bottom: 0; min-width: 180px; }
+
+    .zadatak {
+        background: var(--povrsina);
+        border: 1px solid var(--rub);
+        border-left: 3px solid var(--rub);
+        border-radius: var(--radijus);
+        padding: 18px 20px;
+        margin-bottom: 12px;
+        cursor: pointer;
+        transition: border-color 0.18s, transform 0.15s;
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+    .zadatak:hover { border-color: var(--naglasak); transform: translateX(2px); }
+    .zadatak.rijesen { border-left-color: var(--uspjeh); }
+
+    .zadatak-vrh {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 6px;
+    }
+    .zadatak h3 { font-size: 1.03rem; color: var(--tekst); }
+    .zadatak p { color: var(--tekst-prigusen); font-size: 0.9rem; margin-bottom: 10px; }
+    .zadatak-oznake { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .kvacica { color: var(--uspjeh); font-size: 1.1rem; }
+</style>
+{% endblock %}
+
+{% block sadrzaj %}
+<div class="zaglavlje-stranice">
+    <h1>📝 SQL zadaci</h1>
+    <p>Odaberite zadatak, napišite upit i provjerite rješenje.</p>
+</div>
+
+<div class="filteri">
+    <div class="polje">
+        <label for="filtarSheme">Shema baze</label>
+        <select id="filtarSheme">
+            <option value="">Sve sheme</option>
+            {% for shema in sheme %}
+            <option value="{{ shema.id }}">{{ shema.ikona }} {{ shema.naziv }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="polje">
+        <label for="filtarTezine">Razina težine</label>
+        <select id="filtarTezine">
+            <option value="">Sve razine</option>
+            <option value="početnik">Početnik</option>
+            <option value="srednji">Srednji</option>
+            <option value="napredni">Napredni</option>
+        </select>
+    </div>
+
+    <div class="polje">
+        <label for="filtarStatusa">Status</label>
+        <select id="filtarStatusa">
+            <option value="">Svi zadaci</option>
+            <option value="nerijeseni">Neriješeni</option>
+            <option value="rijeseni">Riješeni</option>
+        </select>
+    </div>
+</div>
+
+<div id="brojac" class="prigusen sitno razmak-s"></div>
+<div id="popis">
+    <div class="prazno"><span class="vrtnja"></span><p>Učitavanje zadataka…</p></div>
+</div>
+{% endblock %}
+
+{% block skripta %}
+<script>
+let sviZadaci = [];
+
+async function ucitaj() {
+    const shema  = document.getElementById('filtarSheme').value;
+    const tezina = document.getElementById('filtarTezine').value;
+
+    const parametri = new URLSearchParams();
+    if (shema)  parametri.set('schema_id', shema);
+    if (tezina) parametri.set('difficulty', tezina);
+
+    try {
+        const podaci = await apiGet('/api/tasks?' + parametri.toString());
+        sviZadaci = podaci.tasks;
+        prikazi();
+    } catch (e) {
+        document.getElementById('popis').innerHTML =
+            `<div class="poruka poruka-greska">${esc(e.message)}</div>`;
+    }
+}
+
+function prikazi() {
+    const status = document.getElementById('filtarStatusa').value;
+    let zadaci = sviZadaci;
+
+    if (status === 'rijeseni')   zadaci = zadaci.filter((z) => z.rijesen);
+    if (status === 'nerijeseni') zadaci = zadaci.filter((z) => !z.rijesen);
+
+    const rijeseno = sviZadaci.filter((z) => z.rijesen).length;
+    document.getElementById('brojac').textContent =
+        `Prikazano ${zadaci.length} zadataka · riješeno ${rijeseno} od ${sviZadaci.length}`;
+
+    if (zadaci.length === 0) {
+        document.getElementById('popis').innerHTML = `
+            <div class="prazno">
+                <div class="ikona">🔍</div>
+                <p>Nema zadataka koji odgovaraju odabranim filtrima.</p>
+            </div>`;
+        return;
+    }
+
+    document.getElementById('popis').innerHTML = zadaci.map((z) => `
+        <a href="/tasks/${z.id}" class="zadatak ${z.rijesen ? 'rijesen' : ''}">
+            <div class="zadatak-vrh">
+                <h3>${z.rijesen ? '<span class="kvacica">✓</span> ' : ''}${esc(z.title)}</h3>
+                <span class="oznaka ${oznakaTezine(z.difficulty)}">${esc(z.difficulty)}</span>
+            </div>
+            <p>${esc(z.description)}</p>
+            <div class="zadatak-oznake">
+                <span class="oznaka oznaka-siva">${esc(z.schema_naziv)}</span>
+                ${z.topic ? `<span class="oznaka oznaka-plava">${esc(z.topic)}</span>` : ''}
+                ${z.ai_generated ? '<span class="oznaka oznaka-ljubicasta">AI</span>' : ''}
+                ${z.broj_pokusaja ? `<span class="prigusen sitno">· ${z.broj_pokusaja} pokušaja</span>` : ''}
+            </div>
+        </a>`).join('');
+}
+
+document.getElementById('filtarSheme').addEventListener('change', ucitaj);
+document.getElementById('filtarTezine').addEventListener('change', ucitaj);
+document.getElementById('filtarStatusa').addEventListener('change', prikazi);
+
+ucitaj();
+</script>
+{% endblock %}

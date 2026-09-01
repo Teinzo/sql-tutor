@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block naslov %}Anketa — {{ app_name }}{% endblock %}
+{% block sirina %}sadrzaj-usko{% endblock %}
+
+{% block stil %}
+<style>
+    .pitanje {
+        border-bottom: 1px solid var(--rub);
+        padding: 18px 0;
+    }
+    .pitanje:last-of-type { border-bottom: none; }
+    .pitanje .tekst { margin-bottom: 12px; font-size: 0.96rem; }
+
+    .ljestvica { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    .ljestvica input[type="radio"] { display: none; }
+
+    .ljestvica label {
+        width: 42px;
+        height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--rub);
+        border-radius: var(--radijus-s);
+        cursor: pointer;
+        font-weight: 600;
+        color: var(--tekst-prigusen);
+        margin: 0;
+        transition: all 0.15s;
+    }
+    .ljestvica label:hover { border-color: var(--naglasak); color: var(--tekst); }
+    .ljestvica input[type="radio"]:checked + label {
+        background: var(--naglasak);
+        border-color: var(--naglasak);
+        color: #ffffff;
+    }
+
+    .krajevi {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.78rem;
+        color: var(--tekst-prigusen);
+        margin-top: 6px;
+        max-width: 260px;
+    }
+</style>
+{% endblock %}
+
+{% block sadrzaj %}
+<div class="zaglavlje-stranice">
+    <h1>🗳️ Anketa o sustavu</h1>
+    <p>Vaši odgovori koriste se za evaluaciju učinkovitosti aplikacije u sklopu
+       završnog rada. Ispunjavanje traje manje od minute.</p>
+</div>
+
+<div id="poruka" class="skriveno"></div>
+<div id="vecIspunjena" class="skriveno"></div>
+
+<div class="kartica" id="obrazacOmot">
+    <form id="obrazac">
+        <div class="pitanje">
+            <div class="tekst">1. Koliko vam je sustav koristan za učenje SQL-a?</div>
+            <div class="ljestvica" data-polje="korisnost"></div>
+            <div class="krajevi"><span>Nimalo</span><span>Vrlo koristan</span></div>
+        </div>
+
+        <div class="pitanje">
+            <div class="tekst">2. Koliko su zadaci i povratne informacije bili jasni?</div>
+            <div class="ljestvica" data-polje="jasnoca"></div>
+            <div class="krajevi"><span>Nejasni</span><span>Vrlo jasni</span></div>
+        </div>
+
+        <div class="pitanje">
+            <div class="tekst">3. Koliko je AI tutor pomogao u razumijevanju gradiva?</div>
+            <div class="ljestvica" data-polje="kvaliteta_ai"></div>
+            <div class="krajevi"><span>Nije pomogao</span><span>Jako pomogao</span></div>
+        </div>
+
+        <div class="pitanje">
+            <div class="tekst">4. Koliko je sučelje pregledno i jednostavno za korištenje?</div>
+            <div class="ljestvica" data-polje="sucelje"></div>
+            <div class="krajevi"><span>Zbunjujuće</span><span>Vrlo pregledno</span></div>
+        </div>
+
+        <div class="pitanje">
+            <div class="tekst">5. Biste li aplikaciju preporučili drugim studentima?</div>
+            <div class="ljestvica" data-polje="preporuka"></div>
+            <div class="krajevi"><span>Sigurno ne</span><span>Sigurno da</span></div>
+        </div>
+
+        <div class="polje" style="margin-top:20px">
+            <label for="komentar">Komentar (neobavezno)</label>
+            <textarea id="komentar" maxlength="2000"
+                      placeholder="Što bi trebalo poboljšati? Što vam se najviše svidjelo?"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-blok" id="gumb">Pošalji odgovore</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block skripta %}
+<script>
+/* Generiranje ljestvica 1–5 */
+document.querySelectorAll('.ljestvica').forEach((lj) => {
+    const polje = lj.dataset.polje;
+    lj.innerHTML = [1, 2, 3, 4, 5].map((n) => `
+        <input type="radio" name="${polje}" id="${polje}-${n}" value="${n}" required>
+        <label for="${polje}-${n}">${n}</label>`).join('');
+});
+
+/* Provjera je li anketa već ispunjena */
+(async () => {
+    try {
+        const r = await apiGet('/api/survey/mine');
+        if (r.ispunjena) {
+            const el = document.getElementById('vecIspunjena');
+            el.className = 'poruka poruka-info';
+            el.innerHTML = `Anketu ste već ispunili ${datumHr(r.datum)}.
+                Ako želite, možete poslati novi odgovor — bit će zabilježen kao dodatan.`;
+        }
+    } catch (e) { /* nije kritično */ }
+})();
+
+document.getElementById('obrazac').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const podaci = { komentar: document.getElementById('komentar').value.trim() || null };
+    let potpuno = true;
+
+    ['korisnost', 'jasnoca', 'kvaliteta_ai', 'sucelje', 'preporuka'].forEach((polje) => {
+        const odabrano = document.querySelector(`input[name="${polje}"]:checked`);
+        if (!odabrano) { potpuno = false; return; }
+        podaci[polje] = parseInt(odabrano.value, 10);
+    });
+
+    if (!potpuno) {
+        poruka('poruka', 'Molimo odgovorite na sva pitanja.', 'upozorenje');
+        return;
+    }
+
+    const gumb = document.getElementById('gumb');
+    gumb.disabled = true;
+    gumb.innerHTML = '<span class="vrtnja"></span> Slanje…';
+
+    try {
+        const r = await apiPost('/api/survey', podaci);
+        document.getElementById('obrazacOmot').innerHTML = `
+            <div class="prazno">
+                <div class="ikona">✅</div>
+                <h2 style="margin-bottom:8px">${esc(r.message)}</h2>
+                <p>Vaši odgovori pomažu u evaluaciji sustava.</p>
+                <a href="/dashboard" class="btn" style="margin-top:18px">Natrag na početnu</a>
+            </div>`;
+        poruka('poruka', '');
+        document.getElementById('vecIspunjena').className = 'skriveno';
+    } catch (err) {
+        poruka('poruka', err.message, 'greska');
+        gumb.disabled = false;
+        gumb.textContent = 'Pošalji odgovore';
+    }
+});
+</script>
+{% endblock %}
